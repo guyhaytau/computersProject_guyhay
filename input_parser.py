@@ -1,4 +1,8 @@
 import config
+import utils
+import numpy as np
+
+from lab_fit_exception import LabFitException
 from calc_input import CalcInput
 
 class InputParser(object):
@@ -17,7 +21,7 @@ class InputParser(object):
 	def read_input_file(self):
 		"""
 		Reads input file and stores the data
-		at self.raw_data parameter
+		at self.raw_data
 		"""
 		with open(self.file_path, 'r') as f:
 			self.raw_data = f.read()
@@ -34,7 +38,8 @@ class InputParser(object):
 			return InputParser.COLUMN_TYPE
 		if self.check_if_row_type():
 			return InputParser.ROW_TYPE
-		return False
+		raise LabFitException("{0} {1}".format(config.INPUT_EXCEPTION_PREFIX, 
+											   config.UNKNOWN_FILE_TYPE))
 
 	def check_if_column_type(self):
 		"""
@@ -42,16 +47,21 @@ class InputParser(object):
 		checks first row for all four title names
 		"""
 		data_lines = self.raw_data.splitlines()
+		data_lines = utils.delete_empty_rows(data_lines)
+
+		# Checks if input data is empty
 		if len(data_lines) == 0:
-			import pdb; pdb.set_trace()
-			raise "SSSSSSSSS"
+			raise LabFitException("{0} {1}".format(config.INPUT_EXCEPTION_PREFIX, 
+												   config.EMPTY_INPUT_FILE))
 
 		title_line = data_lines[0].lower()
-		if title_line.find(config.X_COLUMN_NAME) == -1 or \
-		   title_line.find(config.X_UNCERTAINTY_COLUMN_NAME) == -1 or \
-		   title_line.find(config.Y_COLUMN_NAME) == -1 or \
-		   title_line.find(config.Y_UNCERTAINTY_COLUMN_NAME) == -1:
-		   return False
+
+		for title in title_line.split():
+			if title != config.X_COLUMN_NAME and \
+			   title != config.X_UNCERTAINTY_COLUMN_NAME and \
+			   title != config.Y_COLUMN_NAME and \
+			   title != config.Y_UNCERTAINTY_COLUMN_NAME:
+			   return False
 
 		return True
 
@@ -61,6 +71,7 @@ class InputParser(object):
 		and insert the data into self.input
 		"""
 		data_lines = self.raw_data.splitlines()
+		data_lines = utils.delete_empty_rows(data_lines)
 		titles = data_lines[0].lower().split()
 
 		# Finds data indexes
@@ -74,20 +85,44 @@ class InputParser(object):
 			elif title == config.Y_UNCERTAINTY_COLUMN_NAME:
 				y_uncertainty_index = index
 			else:
-				import pdb; pdb.set_trace()
-				raise "SSSSSSSSSSSss"
+				raise LabFitException("{0} {1}".format(config.INPUT_EXCEPTION_PREFIX, 
+													   config.UNKNOWN_TITLE))
 
+		x_values = []
+		x_uncertainties = []
+		y_values = []
+		y_uncertainties = []
+
+		# Will hold the amount of rows read
+		num_row_read = 0
 		# Insert data into self.input object
 		for row in data_lines[1:]:
-			if len(row) == 0 or row.find(config.AXIS_NAME) != -1:
+			num_row_read += 1
+			# Means end of input
+			if row.find(config.AXIS_NAME) != -1:
 				break
 			data_line_columns = row.split()
-			self.input.x_values.append(data_line_columns[x_index])
-			self.input.x_uncertainties.append(
-									data_line_columns[x_uncertainty_index])
-			self.input.y_values.append(data_line_columns[y_index])
-			self.input.y_uncertainties.append(
-									data_line_columns[y_uncertainty_index])
+			# Checks for unified amount of data
+			if len(data_line_columns) != config.MAX_DATA_TYPE_AMOUNT:
+				raise LabFitException("{0} {1}".format(config.INPUT_EXCEPTION_PREFIX, 
+													   config.DIFFERENT_DATA_AMOUNTS))
+			x_values.append(data_line_columns[x_index])
+			x_uncertainties.append(data_line_columns[x_uncertainty_index])
+			y_values.append(data_line_columns[y_index])
+			y_uncertainties.append(data_line_columns[y_uncertainty_index])
+
+
+		self.input.x_values = np.array(utils.convert_str_list_to_floats(x_values))
+		self.input.x_uncertainties = np.array(utils.convert_str_list_to_floats(x_uncertainties))
+		self.input.y_values = np.array(utils.convert_str_list_to_floats(y_values))
+		self.input.y_uncertainties = np.array(utils.convert_str_list_to_floats(y_uncertainties))
+
+		# Retrieves the x and y axis names
+		for row in data_lines[num_row_read:]:
+			if row.find(config.X_AXIS_INPUT_STRING) != -1:
+				self.input.x_axis_title = row[len(config.X_AXIS_INPUT_STRING):].strip()
+			if row.find(config.Y_AXIS_INPUT_STRING) != -1:
+				self.input.y_axis_title = row[len(config.Y_AXIS_INPUT_STRING):].strip()
 
 	def check_if_row_type(self):
 		"""
@@ -95,9 +130,10 @@ class InputParser(object):
 		checks first element in the first config.MAX_DATA_TYPE_AMOUNT rows
 		"""
 		data_lines = self.raw_data.splitlines()
-		if len(data_lines) == config.MAX_DATA_TYPE_AMOUNT:
-			import pdb; pdb.set_trace()
-			raise "SSSSSSSSS"
+		data_lines = utils.delete_empty_rows(data_lines)
+		if len(data_lines) < config.MAX_DATA_TYPE_AMOUNT:
+			raise LabFitException("{0} {1}".format(config.INPUT_EXCEPTION_PREFIX, 
+													   config.NOT_ENOUGH_DATA_ROWS))
 
 		for row in data_lines[:config.MAX_DATA_TYPE_AMOUNT]:
 			data_columns = row.lower()
@@ -116,33 +152,35 @@ class InputParser(object):
 		and insert the data into self.input
 		"""
 		data_lines = self.raw_data.splitlines()
+		data_lines = utils.delete_empty_rows(data_lines)
 		for row in data_lines[:config.MAX_DATA_TYPE_AMOUNT]:
 			data_columns = row.lower().split()
 			title = data_columns[0]
 			if title == config.X_COLUMN_NAME:
-				self.input.x_values.extend(data_columns[1:]) 
+				self.input.x_values = np.array(utils.convert_str_list_to_floats(data_columns[1:]))
 			elif title == config.X_UNCERTAINTY_COLUMN_NAME:
-				self.input.x_uncertainties.extend(data_columns[1:])
+				self.input.x_uncertainties = np.array(utils.convert_str_list_to_floats(data_columns[1:]))
 			elif title == config.Y_COLUMN_NAME:
-				self.input.y_values.extend(data_columns[1:])
+				self.input.y_values = np.array(utils.convert_str_list_to_floats(data_columns[1:]))
 			elif title == config.Y_UNCERTAINTY_COLUMN_NAME:
-				self.input.y_uncertainties.extend(data_columns[1:])
+				self.input.y_uncertainties = np.array(utils.convert_str_list_to_floats(data_columns[1:]))
 			else:
-				import pdb; pdb.set_trace()
-				raise "SSSSSSSSSSSss"
+				raise LabFitException("{0} {1}".format(config.INPUT_EXCEPTION_PREFIX, 
+													   config.UNKNOWN_TITLE))
 
-		print("all good")
+		# Retrieves the x and y axis names
+		for row in data_lines[config.MAX_DATA_TYPE_AMOUNT:]:
+			if row.find(config.X_AXIS_INPUT_STRING) != -1:
+				self.input.x_axis_title = row[len(config.X_AXIS_INPUT_STRING):].strip()
+			if row.find(config.Y_AXIS_INPUT_STRING) != -1:
+				self.input.y_axis_title = row[len(config.Y_AXIS_INPUT_STRING):].strip()
 
 	def is_valid(self):
 		"""
 		Checks if self.input is valid
+		uses Input object is_valid function
 		"""
-		x_values_length = len(self.input.x_values)
-		if x_values_length != len(self.input.x_uncertainties) or \
-		   x_values_length != len(self.input.y_values) or \
-		   x_values_length != len(self.input.y_uncertainties):
-		   raise "SSSSSSSSSS"
-		print("Todo bien senor")
+		self.input.is_valid()
 
 	def start(self):
 		self.read_input_file()
@@ -155,9 +193,19 @@ def main():
 	"""
 	For Testing purposes
 	"""
-	# input_parser = InputParser(file_path = r"C:\studies\computers\inputOutputExamples\workingCols\input.txt")
-	input_parser = InputParser(file_path = r"C:\studies\computers\inputOutputExamples\workingRows\input.txt")
-	input_parser.start()
+	try:
+		# input_parser = InputParser(file_path = r"C:\studies\computers\inputOutputExamplesGood\inputOutputExamples\workingCols\input.txt")
+		input_parser = InputParser(file_path = r"C:\studies\computers\inputOutputExamplesGood\inputOutputExamples\workingRows\input.txt")
+		input_parser.start()
+		print(input_parser.input)
+	except LabFitException as e:
+		print(e.message)
+	except Exception as e:
+		raise
+	else:
+		pass
+	finally:
+		pass
 
 if __name__ == '__main__':
 	main()
