@@ -7,7 +7,9 @@ from lab_fit_exception import LabFitException
 class CalcInput(object):
 	"""Holds all the information from the input file"""
 	def __init__(self, x_values = None, x_uncertainties = None,
-				 y_values = None, y_uncertainties = None, 
+				 y_values = None, y_uncertainties = None,
+				 a_values = None, b_values = None,
+				 a_step_size = None, b_step_size = None,
 				 x_axis_title = config.X_AXIS_DEFAULT, 
 				 y_axis_title = config.Y_AXIS_DEFAULT):
 		super(CalcInput, self).__init__()
@@ -19,6 +21,15 @@ class CalcInput(object):
 												else []
 		self.x_axis_title = x_axis_title
 		self.y_axis_title = y_axis_title
+		self.a_values = a_values
+		self.b_values = b_values
+		self.a_step_size = a_step_size
+		self.b_step_size = b_step_size
+		if type(self.a_values) != type(None) and self.a_values.all() \
+		   and type(self.b_values) != type(None) and self.b_values.all():
+			self.contains_ab_values = True
+		else:
+			self.contains_ab_values = False
 
 	def is_valid(self):
 		"""
@@ -55,4 +66,6 @@ class CalcInput(object):
 			   "Y Values:{0}\n".format(self.y_values) + \
 			   "Y Uncertainties:{0}\n".format(self.y_uncertainties) + \
 			   "X axis: {0}\n".format(self.x_axis_title) + \
-			   "Y axis: {0}\n".format(self.y_axis_title)
+			   "Y axis: {0}\n".format(self.y_axis_title) + \
+			   "A values: {0}\n".format(self.a_values) + \
+			   "B values: {0}\n".format(self.b_values)

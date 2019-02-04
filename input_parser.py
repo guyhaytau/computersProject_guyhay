@@ -13,10 +13,11 @@ class InputParser(object):
 	COLUMN_TYPE = 1
 	ROW_TYPE = 2
 
-	def __init__(self, file_path = None, raw_data = None):
+	def __init__(self, file_path = None, raw_data = None, contains_ab_values = False):
 		super(InputParser, self).__init__()
 		self.file_path = file_path
 		self.input = CalcInput()
+		self.contains_ab_values = contains_ab_values
 
 	def read_input_file(self):
 		"""
@@ -118,11 +119,10 @@ class InputParser(object):
 		self.input.y_uncertainties = np.array(utils.convert_str_list_to_floats(y_uncertainties))
 
 		# Retrieves the x and y axis names
-		for row in data_lines[num_row_read:]:
-			if row.find(config.X_AXIS_INPUT_STRING) != -1:
-				self.input.x_axis_title = row[len(config.X_AXIS_INPUT_STRING):].strip()
-			if row.find(config.Y_AXIS_INPUT_STRING) != -1:
-				self.input.y_axis_title = row[len(config.Y_AXIS_INPUT_STRING):].strip()
+		self.parse_x_y_axis_names(data_lines, num_row_read)
+		# Retrieves the a and b values
+		self.parse_a_b_values(data_lines, config.MAX_DATA_TYPE_AMOUNT)
+
 
 	def check_if_row_type(self):
 		"""
@@ -169,11 +169,55 @@ class InputParser(object):
 													   config.UNKNOWN_TITLE))
 
 		# Retrieves the x and y axis names
-		for row in data_lines[config.MAX_DATA_TYPE_AMOUNT:]:
+		self.parse_x_y_axis_names(data_lines, config.MAX_DATA_TYPE_AMOUNT)
+		# Retrieves the a and b values
+		self.parse_a_b_values(data_lines, config.MAX_DATA_TYPE_AMOUNT)
+
+	def parse_x_y_axis_names(self, data_lines, start_line):
+		"""
+		Retrieves the x and y axis names from the data_lines
+		and inserts the x and y axis names to self.input
+		start_line - the first line to start to check for the x and y axis
+		"""
+		for row in data_lines[start_line:]:
 			if row.find(config.X_AXIS_INPUT_STRING) != -1:
 				self.input.x_axis_title = row[len(config.X_AXIS_INPUT_STRING):].strip()
 			if row.find(config.Y_AXIS_INPUT_STRING) != -1:
 				self.input.y_axis_title = row[len(config.Y_AXIS_INPUT_STRING):].strip()
+
+	def parse_a_b_values(self, data_lines, start_line):
+		"""
+		Retrieves the a and b values from the data_lines
+		and inserts the a and b values to self.input
+		start_line - the first line to start to check for the x and y axis
+		"""
+		# If called without, should quietly return
+		if not self.contains_ab_values:
+			return None
+
+		# Retrieves the a and b values range
+		for row in data_lines[start_line:]:
+			if row.find(config.A_VALUES_INPUT_STRING) != -1:
+				a_values = row[len(config.A_VALUES_INPUT_STRING):].strip().split()
+				a_values = utils.convert_str_list_to_floats(a_values)
+				self.input.a_step_size = a_values[config.AB_VALUES_STEP_INDEX]
+				self.input.a_values = np.append(np.arange(a_values[config.AB_VALUES_START_INDEX],
+														  a_values[config.AB_VALUES_END_INDEX],
+														  a_values[config.AB_VALUES_STEP_INDEX]),
+												a_values[config.AB_VALUES_END_INDEX])
+			if row.find(config.B_VALUES_INPUT_STRING) != -1:
+				b_values = row[len(config.B_VALUES_INPUT_STRING):].strip().split()
+				b_values = utils.convert_str_list_to_floats(b_values)
+				self.input.b_step_size = b_values[config.AB_VALUES_STEP_INDEX]
+				self.input.b_values = np.append(np.arange(b_values[config.AB_VALUES_START_INDEX],
+														  b_values[config.AB_VALUES_END_INDEX],
+														  b_values[config.AB_VALUES_STEP_INDEX]),
+												b_values[config.AB_VALUES_END_INDEX])
+
+		if type(self.input.a_values) != type(None) and self.input.a_values.all() \
+		   and type(self.input.b_values) != type(None) and self.input.b_values.all():
+			self.input.contains_ab_values = True
+
 
 	def is_valid(self):
 		"""

@@ -8,6 +8,13 @@ X_AXIS_INPUT_STRING = 'x axis:'
 Y_AXIS_INPUT_STRING = 'y axis:'
 X_AXIS_DEFAULT = 'x axis'
 Y_AXIS_DEFAULT = 'y axis'
+A_PLOT_X_LABEL = 'a'
+A_PLOT_Y_LABEL_FORMAT = 'chi2(b = {0})'
+A_VALUES_INPUT_STRING = 'a '
+B_VALUES_INPUT_STRING = 'b '
+AB_VALUES_START_INDEX = 0
+AB_VALUES_END_INDEX = 1
+AB_VALUES_STEP_INDEX = 2
 
 # The output format for the linear fit
 # 0 - a value
@@ -23,6 +30,7 @@ chi2 = {4}
 chi2_reduced = {5}
 """
 LINEAR_PLOT_FILE_NAME = "linear_fit"
+A_PLOT_FILE_NAME = "numeric_sampling"
 
 # Error Strings
 INPUT_EXCEPTION_PREFIX = "Input file error:"
