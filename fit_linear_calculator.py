@@ -15,28 +15,48 @@ class FitLinearCalculator(object):
 		self.chi = 0
 		self.chi_reduced = 0
 
-	def calculate_chi_chi_reduced(self, a_value = None, b_value = None, return_value = False):
+	def calculate_chi(self, a_value = None, b_value = None):
 		"""
 		Calculates the chi and chi reduced value
 		a_value - the a value to use, if none will use self.a_value
 		b_value - the b value to use, if none will use self.b_value
-		return_value - returns value instead of inserting it to
-					   self.chi and self.chi_reduced
 		"""
 		a_value = a_value if a_value != None else self.a_value
 		b_value = b_value if b_value != None else self.b_value
-		chi_top_expression = self.input.y_values - (a_value * \
+		chi_top_exp = self.input.y_values - (a_value * \
 										  			self.input.x_values + \
 										  			b_value)
-		chi_expression = chi_top_expression / self.input.y_uncertainties
+		chi_expression = chi_top_exp / self.input.y_uncertainties
 		chi = np.sum(np.power(chi_expression, 2))
 		chi_reduced = chi / (len(self.input.x_values) - 2)
 
-		if return_value:
-			return chi, chi_reduced
-		else:
-			self.chi = chi
-			self.chi_reduced = chi_reduced
+		self.chi = chi
+		self.chi_reduced = chi_reduced
+
+		return chi, chi_reduced
+
+	def calculate_chi_accurate(self, a_value = None, b_value = None):
+		"""
+		Calculates the chi and chi reduced value
+		a_value - the a value to use, if none will use self.a_value
+		b_value - the b value to use, if none will use self.b_value
+		The difference between self.calculate_chi is the
+		equation used to calculate, where this function does not assume
+		adx << dy
+		"""
+		a_value = a_value if a_value != None else self.a_value
+		b_value = b_value if b_value != None else self.b_value
+		linear_func = self.create_linear_function(a_value, b_value)
+		chi_top_exp = self.input.y_values - np.vectorize(linear_func)(self.input.x_values)
+		func_plus_dx = np.vectorize(linear_func)(self.input.x_values + self.input.x_uncertainties)
+		func_minus_dx = np.vectorize(linear_func)(self.input.x_values - self.input.x_uncertainties)
+		chi_bottom_exp = func_plus_dx - func_minus_dx
+		chi_bottom_exp = pow(chi_bottom_exp, 2)
+		chi_bottom_exp = pow(pow(self.input.y_uncertainties,2) + chi_bottom_exp, 0.5)
+		chi = np.sum(pow((chi_top_exp / chi_bottom_exp), 2))
+		chi_reduced = chi / (len(self.input.x_values) - 2)
+		return chi, chi_reduced
+
 
 	def calculate_linear_a_b_values(self):
 		"""
@@ -58,8 +78,7 @@ class FitLinearCalculator(object):
 							 (len(self.input.x_values) * (mean_square_x - square_x_mean))
 
 		self.a_uncertainty = np.power(self.a_uncertainty, 0.5)
-
-		self.b_value = y_mean - self.a_value * x_mean
+		self.b_value = y_mean - (self.a_value * x_mean)
 
 		self.b_uncertainty = (mean_square_y_uncertainty * mean_square_x) / \
 							 (len(self.input.x_values) * (mean_square_x - square_x_mean))
@@ -72,14 +91,13 @@ class FitLinearCalculator(object):
 		"""
 		best_a = self.input.a_values[0]
 		best_b = self.input.b_values[0]
-		best_chi, best_chi_reduced = self.calculate_chi_chi_reduced(best_a, best_b, 
-																	return_value = True)
+		best_chi, best_chi_reduced = self.calculate_chi_accurate(best_a, best_b)
 		test_chi = best_chi
 		for a_value in self.input.a_values:
 			for b_value in self.input.b_values:
 				# Calculates chi and determines if it is better
-				test_chi, test_chi_reduced = self.calculate_chi_chi_reduced(a_value, b_value, 
-																			return_value = True)
+				test_chi, test_chi_reduced = self.calculate_chi_accurate(a_value, b_value)
+
 				if best_chi > test_chi:
 					best_chi = test_chi
 					best_chi_reduced = test_chi_reduced
@@ -103,8 +121,7 @@ class FitLinearCalculator(object):
 		chi_values = []
 		for a_value in self.input.a_values:
 			# Calculates chi and chi reduced
-			chi, chi_reduced = self.calculate_chi_chi_reduced(a_value, self.b_value, 
-															  return_value = True)
+			chi, chi_reduced = self.calculate_chi_accurate(a_value, self.b_value)
 			chi_values.append(chi)
 
 		return copy.deepcopy(self.input.a_values), np.array(chi_values)
@@ -129,11 +146,12 @@ class FitLinearCalculator(object):
 		ax = plt.axes()
 		x = np.linspace(np.min(self.input.x_values), 
 						np.max(self.input.x_values), 1000)
-		ax.plot(x, np.vectorize(linear_function)(x), color = 'r')
 		plt.errorbar(self.input.x_values, self.input.y_values,
 					 xerr = self.input.x_uncertainties,
 					 yerr = self.input.y_uncertainties, fmt='+',
 					 ecolor='b')
+		# zorder so it will be infront, like in the examples not like the instructions
+		ax.plot(x, np.vectorize(linear_function)(x), color = 'r', zorder=32)
 		plt.xlabel(self.input.x_axis_title)
 		plt.ylabel(self.input.y_axis_title)
 
@@ -159,12 +177,14 @@ class FitLinearCalculator(object):
 		ax = plt.axes()
 		ax.plot(a_values, chi_values, color = 'b')
 		plt.xlabel(config.A_PLOT_X_LABEL)
-		plt.ylabel(config.A_PLOT_Y_LABEL_FORMAT.format(np.round(self.b_value, 1)))
+		# Rounding to counter numpy machine error
+		plt.ylabel(config.A_PLOT_Y_LABEL_FORMAT.format(np.round(self.b_value, np.finfo(np.double).precision - 2)))
 
 		if plot:
 			plt.show()
 
 		if save_plot_name:
+			# bbox_inches so the y label won't be cut out of the svg
 			plt.savefig(save_plot_name + '.svg', bbox_inches='tight')
 
 		# Closes figure window so it won't show when another function calls plt.show()
@@ -191,18 +211,30 @@ class FitLinearCalculator(object):
 		square_weights_devided = np.sum(np.power(1 / self.input.y_uncertainties, 2))
 		return np.sum(data_points / square_weights) / square_weights_devided
 
-	def create_linear_function(self):
+	def create_linear_function(self, a_value = None, b_value = None):
+		"""
+		Creates the linear function from a and b values
+		a_value - the a value to use, if none will use self.a_value
+		b_value - the b value to use, if none will use self.b_value
+		"""
+		a_value = a_value if a_value != None else self.a_value
+		b_value = b_value if b_value != None else self.b_value
 		def linear_function(x):
-			return self.a_value * x + self.b_value
+			return a_value * x + b_value
 
 		return linear_function
 
 	def calculate(self, chose_ab = False):
+		"""
+		Calculates and changes object with the resulting
+		a b chi and chi reduced values
+		"""
 		if chose_ab and self.input.contains_ab_values:
 			self.chose_best_a_b_values()
 		else:
 			self.calculate_linear_a_b_values()
-			self.calculate_chi_chi_reduced()
+			self.calculate_chi()
+
 
 
 		

@@ -34,9 +34,6 @@ def parse_args():
 
 
 def main(file_path, bonus):
-	file_path_column = r"C:\studies\computers\inputOutputExamples\workingCols\input.txt"
-	file_path_row = r"C:\studies\computers\inputOutputExamples\workingRows\input.txt"
-
 	try:
 		if bonus:
 			search_best_parameter(file_path)
